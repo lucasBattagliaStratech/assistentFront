@@ -1,7 +1,7 @@
 import {
   AnimationClip,
   NumberKeyframeTrack,
-} from 'three';
+} from 'three'
 
 const visemeMapping = {
   0: "viseme_sil",
@@ -46,55 +46,35 @@ function translateViseme(visemeId) {
 }
 
 function createAnimation(recordedData, morphTargetDictionary, bodyPart) {
-  console.log("----morphTargetDictionary", { recordedData, morphTargetDictionary });
 
   if (recordedData.length !== 0) {
     let animation = [];
     for (let i = 0; i < Object.keys(morphTargetDictionary).length; i++) {
-      animation.push([]);
+      animation.push({ time: [], animation: [] })
     }
-
-    let time = [];
-    let accumulatedTime = 0;
 
     recordedData.forEach((d, i) => {
       const visemeIndex = d.viseme
       const visemeTime = d.time
-      const visemeKey = translateViseme(visemeIndex)
+      const visemeKey = Number(translateViseme(visemeIndex))
 
-      console.log(visemeKey)
-      // animation[visemeValue].push(1.0)
-      // if (visemeKey && visemeIndex in morphTargetDictionary) {
-      //   // Rellenamos los valores en la posición correcta del viseme en la animación
-      //   animation[morphTargetDictionary[visemeKey]].push(1.0); // Viseme activo
-      // }
-
-      // Añadimos valores para los visemes inactivos
       Object.keys(morphTargetDictionary).forEach((key, idx) => {
-        if (idx !== visemeKey) {
-          animation[idx].push(0.0); // Viseme inactivo
-        } else {
-          animation[idx].push(1.0)
-        }
-      });
+        animation[idx].animation.push(idx === visemeKey ? .6 : 0.0)
 
-      // Guardamos el tiempo en segundos
-      time.push(accumulatedTime);
-      accumulatedTime += visemeTime
-    });
+        animation[idx].time.push(visemeTime)
+      })
 
-    // Creación de los tracks de animación
+    })
+
     let tracks = [];
 
-    // Iteramos sobre cada entrada del morphTargetDictionary
-
     Object.keys(morphTargetDictionary).forEach((key, idx) => {
-      console.log({ animation: animation[idx], bodyPart, key, idx, time })
-      let track = new NumberKeyframeTrack(`${bodyPart}.morphTargetInfluences[${idx}]`, time, animation[idx]);
-      tracks.push(track);
+      if (animation[idx].animation.every(value => value === 0)) return
+      let track = new NumberKeyframeTrack(`${bodyPart}.morphTargetInfluences[${idx}]`, animation[idx].time, animation[idx].animation)
+      tracks.push(track)
     });
 
-    const clip = new AnimationClip('animation', -1, tracks);
+    const clip = new AnimationClip('animation', -1, tracks)
     return clip;
   }
 

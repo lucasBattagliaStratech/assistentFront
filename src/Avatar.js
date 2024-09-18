@@ -1,42 +1,35 @@
-import React, { Suspense, useEffect, /*useRef,*/ useState, useMemo, useRef } from 'react'
-import { Canvas, useFrame, useLoader, extend, useThree } from '@react-three/fiber'
+import React, { Suspense, useEffect, useState, useMemo, useRef } from 'react'
+import { Canvas, useFrame, useLoader, extend } from '@react-three/fiber'
 import { useTexture, Loader, Environment, useFBX, useAnimations, useVideoTexture } from '@react-three/drei'
 import { MeshStandardMaterial } from 'three/src/materials/MeshStandardMaterial'
-import { OrbitControls } from '@react-three/drei'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
 
 import { LineBasicMaterial, MeshPhysicalMaterial, Vector2, PlaneGeometry } from 'three'
 import ReactAudioPlayer from 'react-audio-player'
 
-import createAnimation from './converter2'
-import blinkData from './blendDataBlink.json'
-import {
-  AnimationClip,
-  NumberKeyframeTrack,
-} from 'three';
+import createAnimation from './converter'
+
 import * as THREE from 'three'
 import axios from 'axios'
 
 import { LinearEncoding, sRGBEncoding } from '@react-three/drei/helpers/deprecated'
 
-import avatar from "./pizzas.glb"
-
-// import avatar from "./model.glb"
+import avatar from "./avatar.glb"
 
 const isModelDefault = false
 
 const _ = require('lodash')
 
-const host = 'http://localhost:5000'
+const host = 'https://orange-squids-tap.loca.lt'
 // const host = 'https://8c98ad1bb948e7.lhr.life'
-const path = 'http://localhost:3000'
+const path = 'http://93.148.241.98:3000'
 // const path = 'https://3f6c-2-40-82-43.ngrok-free.app'
 
 let threadId = undefined
 
 extend({ PlaneGeometry })
 
-function Avatar({ speak, setSpeak, setAudioSource, playing, audio }) {
+function Avatar({ speak, setSpeak, setAudioSource, playing, audio, setText }) {
   let gltf = useLoader(GLTFLoader, avatar)
 
   let morphTargetDictionaryBody = null
@@ -186,7 +179,7 @@ function Avatar({ speak, setSpeak, setAudioSource, playing, audio }) {
       } else {
         if (node.name === 'Wolf3D_Outfit_Top') {
           node.material.map = null
-          node.material.color.set(0x0040ff)
+          node.material.color.set(0xffffff)
         }
       }
 
@@ -205,13 +198,15 @@ function Avatar({ speak, setSpeak, setAudioSource, playing, audio }) {
     makeSpeech(threadId, audio)
       .then(response => {
         let { blendData, filename } = response.data
+        setText({ input: response.data.text, output: response.data.response })
+
         threadId = response.data.threadId
 
         let newClips = [
           createAnimation(blendData, morphTargetDictionaryBody, isModelDefault ? 'HG_Body' : 'Wolf3D_Head'),
           createAnimation(blendData, morphTargetDictionaryLowerTeeth, isModelDefault ? 'HG_TeethLower' : 'Wolf3D_Teeth'),
           createAnimation(blendData, morphTargetDictionaryBody, 'EyeLeft'),
-          createAnimation(blendData, morphTargetDictionaryLowerTeeth, 'EyeRight')
+          createAnimation(blendData, morphTargetDictionaryBody, 'EyeRight')
         ]
 
         filename = host + filename
@@ -282,7 +277,7 @@ function makeSpeech(threadId, audio) {
   formdata.append('threadId', threadId)
   if (audio) formdata.append('audio', audio, 'audio-file.webm')
 
-  return axios.post(host + '/talk', formdata, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return axios.post(host + '/talk', formdata, { headers: { 'Content-Type': 'multipart/form-data', 'bypass-tunnel-reminder': 'your-value-here' } });
 }
 
 const STYLES = {
@@ -294,32 +289,98 @@ const STYLES = {
   checkbox: { marginLeft: '5px' }
 }
 
-function CameraController() {
-  const { camera } = useThree();
-
-  useEffect(() => {
-    // camera.up = [0, 3, 0]
-  }, [camera])
-  setTimeout(() => {
-    console.log(camera)
-  }, 10000);
-
-  return null;
-}
-
 const MyAvatar = () => {
   const [audioBlob, setAudioBlob] = useState('')
   const [speak, setSpeak] = useState(false)
   const [audioSource, setAudioSource] = useState('')
+  const [audioUrl, setAudioUrl] = useState('')
   const [playing, setPlaying] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isClicking, setIsClicking] = useState(false)
+  const [text, setText] = useState({ input: '', output: '' })
 
+  useEffect(() => {
+    console.log(text)
+  }, [text])
+
+  const wordStyles = {
+    small: {
+      fontSize: '12px',
+    },
+    medium: {
+      fontSize: '24px',
+    },
+    large: {
+      fontSize: '36px',
+    },
+    xlarge: {
+      fontSize: '48px',
+    },
+    red: {
+      color: '#e74c3c',
+    },
+    blue: {
+      color: '#3498db',
+    },
+    green: {
+      color: '#2ecc71',
+    },
+    purple: {
+      color: '#9b59b6',
+    },
+    common: {
+      margin: '5px',
+      fontWeight: 'bold',
+      display: 'inline-block',
+      transition: 'transform 0.3s ease-in-out',
+    },
+  };
+  const containerStyles = {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    width: '80%',
+    margin: '0 auto',
+    textAlign: 'center',
+  };
+  const handleHover = (event) => {
+    event.target.style.transform = 'scale(1.2)';
+  };
+  const handleMouseOut = (event) => {
+    event.target.style.transform = 'scale(1)';
+  };
+
+
+  useEffect(() => {
+    const fetchAudio = async () => {
+      try {
+        const response = await fetch(audioSource, {
+          headers: {
+            'bypass-tunnel-reminder': 'any-value'
+          }
+        });
+
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          setAudioUrl(url);
+        } else {
+          console.error('Error fetching audio:', response.statusText);
+        }
+      } catch (error) {
+        console.error('Error fetching audio:', error);
+      }
+    };
+
+    fetchAudio();
+
+    // Cleanup URL object when component unmounts
+    return () => URL.revokeObjectURL(audioUrl);
+  }, [audioSource]);
 
   return (
     <>
       <Canvas camera={{ position: [0, -.04, .5] }}>
-        <CameraController />
         <ambientLight intensity={0.8} />
         <spotLight intensity={1.5} position={[10, 20, 10]} />
         <Suspense fallback={null}>
@@ -339,12 +400,66 @@ const MyAvatar = () => {
             setAudioSource={setAudioSource}
             playing={playing}
             audio={audioBlob}
+            setText={setText}
           />
-          <OrbitControls position={[0, 1, 2]} />
           <Environment preset='sunset' />
         </Suspense>
       </Canvas>
       <Loader />
+      {text.input !== '' &&
+        <div style={{ position: 'absolute', top: '25px', right: '7%', zIndex: 500 }}>
+          <div style={{ marginLeft: '25px', position: 'relative' }}>
+            <div style={{
+              maxWidth: '40dvw',
+              backgroundColor: 'white',
+              padding: '20px',
+              fontSize: '3.5rem',
+              borderRadius: '1rem 0 1rem 1rem',
+              fontWeight: 'bold',
+              position: 'relative',
+            }}>
+              {text.input}
+
+              <div style={{
+                content: '""',
+                position: 'absolute',
+                top: '0px',
+                right: '-14px',
+                width: 0,
+                height: 0,
+                borderBottom: '15px solid transparent',
+                borderLeft: '15px solid white',
+              }} />
+            </div>
+          </div>
+
+          <div style={{ marginRight: '25px', position: 'relative' }}>
+            <div style={{
+              maxWidth: '40dvw',
+              marginTop: "1rem",
+              backgroundColor: 'lightblue',
+              padding: '20px',
+              fontSize: '3.5rem',
+              borderRadius: '0 1rem 1rem 1rem',
+              fontWeight: 'bolder',
+              position: 'relative',
+              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+            }}>
+              {text.output}
+              <div style={{
+                content: '""',
+                position: 'absolute',
+                top: '0px',
+                left: '-14px',
+                width: 0,
+                height: 0,
+                borderBottom: '15px solid transparent',
+                borderRight: '15px solid lightblue',
+              }} />
+            </div>
+          </div>
+        </div>
+      }
       <div style={STYLES.area}>
         <ColorToggleButton
           isRecording={isRecording}
@@ -361,7 +476,7 @@ const MyAvatar = () => {
       </div>
       <div style={STYLES.area2}>
         <ReactAudioPlayer
-          src={audioSource}
+          src={audioUrl}
           autoPlay
           onPlay={() => setPlaying(true)}
           onEnded={() => setPlaying(false)}
@@ -379,47 +494,30 @@ const ColorToggleButton = ({ isRecording, setIsClicking }) => {
   }
 
   return (
-    // <button
-    //   onClick={handleClick}
-    //   style={{
-    //     backgroundColor: isRecording ? 'red' : 'blue',
-    //     color: 'white',
-    //     borderRadius: '50%',
-    //     width: '100px',
-    //     height: '100px',
-    //     border: 'none',
-    //     fontSize: '16px',
-    //     cursor: 'pointer',
-    //     transition: 'background-color 0.5s ease',
-    //   }}
-    // >
-    //   {isRecording ? 'Fermare' : 'Parlare'}
-    // </button>
     <button
       onClick={handleClick}
       style={{
-        backgroundColor: isRecording ? 'red' : 'blue',
+        backgroundColor: isRecording ? 'red' : 'white',
         color: 'white',
         borderRadius: '2rem',
-        // marginLeft: "100px",
-        width: '170px',
-        height: '100px',
+        width: '17rem',
+        height: '8rem',
         border: 'none',
-        fontSize: '16px',
+        fontSize: '3.5rem',
         cursor: 'pointer',
         transition: 'background-color 0.5s ease',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        position: 'relative', // Necesario para posicionar el texto y la imagen
-        padding: '0', // Elimina el padding para ajustar el contenido
+        position: 'relative',
+        padding: '0',
       }}
     >
       <img
         src={'/microphone.png'}
         alt={isRecording ? 'Stop' : 'Start'}
-        style={{ // Posiciona la imagen absolutamente dentro del botón
-          width: '60px', // Ajusta el tamaño de la imagen
+        style={{
+          width: '60px',
           height: '60px',
         }}
       />
@@ -427,8 +525,6 @@ const ColorToggleButton = ({ isRecording, setIsClicking }) => {
         style={{
           color: 'black',
           fontWeight: "bold",
-          fontSize: "25px",
-          // zIndex: 1, // Asegura que el texto esté sobre la imagen
         }}
       >
         {isRecording ? 'Ferma' : 'Parla'}
@@ -489,7 +585,6 @@ const AudioRecorder = (props) => {
 }
 
 function Bg() {
-  // const texture = useTexture('/images/bg.webp')
   const texture = useVideoTexture('/prova.mp4')
 
   return (
